@@ -6,7 +6,7 @@ trigger:
       - main   # runs on each push to main branch
 
 pool:
-  vmImage: 'ubuntu-latest'
+  vmImage: 'Default'
 
 variables:
   node_version: '18.x'
