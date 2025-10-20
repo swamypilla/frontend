@@ -1,19 +1,63 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
+# Pipeline: Build and Deploy Angular app to Azure Static Web App from GitHub
 
 trigger:
-- main
+  branches:
+    include:
+      - main   # runs on each push to main branch
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: 'ubuntu-latest'
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+variables:
+  node_version: '18.x'
+  app_location: '/'                       # root of the Angular app in repo
+  output_location: 'dist/my-angular-app'   # path to built Angular app
+  azure_static_webapp: 'pilla-ui-app'    # name of your Static Web App resource
+  azure_service_connection: 'pilla-azure-service-connection'  # Azure DevOps service connection name
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+stages:
+# -------------------- BUILD --------------------
+- stage: Build
+  displayName: "Build Angular App"
+  jobs:
+  - job: Build
+    steps:
+    - checkout: self
+
+    - task: NodeTool@0
+      displayName: "Use Node.js $(node_version)"
+      inputs:
+        versionSpec: '$(node_version)'
+
+    - script: |
+        npm ci
+        npm run build -- --configuration production
+      displayName: "Install and Build Angular"
+
+    - task: PublishBuildArtifacts@1
+      displayName: "Publish Angular build artifacts"
+      inputs:
+        pathToPublish: '$(output_location)'
+        artifactName: 'angular-build'
+
+# -------------------- DEPLOY --------------------
+- stage: Deploy
+  displayName: "Deploy to Azure Static Web App"
+  dependsOn: Build
+  jobs:
+  - deployment: DeployStaticWebApp
+    displayName: "Deploy Angular to Azure Static Web App"
+    environment: 'dev'     # or qa/stage/prod if using multiple environments
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: angular-build
+
+          - task: AzureStaticWebApp@0
+            displayName: "Deploy to Azure Static Web App"
+            inputs:
+              azure_static_web_apps_api_token: '$(static-webapp-token)'
+              app_location: '$(app_location)'
+              output_location: '$(output_location)'
